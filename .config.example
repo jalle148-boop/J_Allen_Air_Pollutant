@@ -1,0 +1,6 @@
+{
+  "database_path": "C:\\path\\to\\your\\database\\folder",
+  "output_path": "C:\\path\\to\\your\\output\\folder",
+  "max_workers": 4,
+  "verbose": false
+}

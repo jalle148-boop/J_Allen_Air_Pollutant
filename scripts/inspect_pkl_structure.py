@@ -7,15 +7,36 @@ Usage:
     python scripts/inspect_pkl_structure.py --input path\to\file.pkl --output report.txt
     python scripts/inspect_pkl_structure.py --input path\to\file.zip
     python scripts/inspect_pkl_structure.py --input path\to\file.zip --zip-member data.pkl
+    python scripts/inspect_pkl_structure.py   # Opens file dialog to select file interactively
 """
 
 from __future__ import annotations
 
 import argparse
 import pickle
+import sys
 import zipfile
 from collections.abc import Mapping, Sequence
+from tkinter import Tk, filedialog
 from typing import Any
+
+
+def prompt_for_file() -> str | None:
+    """Open a file dialog to select a .pkl or .zip file."""
+    root = Tk()
+    root.withdraw()  # Hide the main window
+    root.attributes("-topmost", True)  # Bring dialog to front
+    
+    file_path = filedialog.askopenfilename(
+        title="Select a pickle (.pkl) or zip file",
+        filetypes=[
+            ("Pickle files", "*.pkl"),
+            ("Zip files", "*.zip"),
+            ("All files", "*.*")
+        ]
+    )
+    root.destroy()
+    return file_path if file_path else None
 
 
 def load_pickle(path: str) -> Any:
@@ -102,7 +123,7 @@ def build_report(path: str, max_depth: int, max_items: int, zip_member: str | No
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Inspect a pickle file and report its structure.")
-    parser.add_argument("--input", required=True, help="Path to a .pkl or .zip file")
+    parser.add_argument("--input", help="Path to a .pkl or .zip file (will prompt if not provided)")
     parser.add_argument("--zip-member", help="Optional .pkl member inside a zip file")
     parser.add_argument("--output", help="Optional path to write the report")
     parser.add_argument("--max-depth", type=int, default=6, help="Maximum recursion depth")
@@ -112,7 +133,18 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    report = build_report(args.input, args.max_depth, args.max_items, args.zip_member)
+    
+    # Get input file path - prompt if not provided
+    input_path = args.input
+    if not input_path:
+        print("No input file specified. Opening file dialog...")
+        input_path = prompt_for_file()
+        if not input_path:
+            print("No file selected. Exiting.")
+            sys.exit(1)
+        print(f"Selected: {input_path}\n")
+    
+    report = build_report(input_path, args.max_depth, args.max_items, args.zip_member)
 
     if args.output:
         with open(args.output, "w", encoding="utf-8") as handle:
