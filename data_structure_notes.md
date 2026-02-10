@@ -1,4 +1,8 @@
-General summary:
+General summary of data-reading folder (data library):
+
+- first level down is the pollutant name. So data library has N number of directories in it, where the name of each directory is a unique pollutant
+
+General summary of each shapelet file:
 
 The pickle file contains a dictionary with a hierarchical structure:
 
