@@ -9,6 +9,7 @@ parser      Parse filenames and dataset keys into metadata.
 records     Flatten nested pickle data into record dicts.
 validator   Validate records against the expected schema.
 db          SQLite database writer and schema management.
+exporter    ArcGIS-ready CSV export utilities.
 """
 
 from helpers.loader import (
@@ -21,6 +22,11 @@ from helpers.parser import parse_dataset_key, parse_filename
 from helpers.records import iter_records
 from helpers.validator import validate_record
 from helpers.db import init_db, insert_shapelets, start_ingestion_run, finish_ingestion_run
+from helpers.exporter import (
+    build_export_query,
+    write_csv,
+    write_site_summary_csv,
+)
 
 __all__ = [
     # loader
@@ -40,4 +46,8 @@ __all__ = [
     "insert_shapelets",
     "start_ingestion_run",
     "finish_ingestion_run",
+    # exporter
+    "build_export_query",
+    "write_csv",
+    "write_site_summary_csv",
 ]
