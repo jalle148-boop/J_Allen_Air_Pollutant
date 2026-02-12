@@ -51,9 +51,30 @@ def load_config() -> dict[str, Any]:
         sys.exit(1)
 
 
+def get_data_path() -> Path:
+    """
+    Get the raw data input path from configuration.
+    
+    Returns:
+        Path object pointing to the directory with raw .pkl / .zip files
+    """
+    config = load_config()
+    data_path = config.get("data_path")
+    
+    if not data_path:
+        print("Error: data_path not found in configuration", file=sys.stderr)
+        sys.exit(1)
+    
+    path = Path(data_path)
+    if not path.exists():
+        print(f"Warning: Data path does not exist: {path}", file=sys.stderr)
+    
+    return path
+
+
 def get_database_path() -> Path:
     """
-    Get the database path from configuration.
+    Get the database output path from configuration.
     
     Returns:
         Path object pointing to the database directory
@@ -72,16 +93,25 @@ def get_database_path() -> Path:
     return path
 
 
-def get_output_path() -> Path:
+def get_arcgis_inputs_path() -> Path:
     """
-    Get the output path from configuration.
+    Get the ArcGIS export path from configuration.
     
     Returns:
-        Path object pointing to the output directory
+        Path object pointing to the ArcGIS inputs directory
     """
     config = load_config()
-    output_path = config.get("output_path", str(get_project_root()))
-    return Path(output_path)
+    arc_path = config.get("arcgis_inputs_path")
+    
+    if not arc_path:
+        print("Error: arcgis_inputs_path not found in configuration", file=sys.stderr)
+        sys.exit(1)
+    
+    path = Path(arc_path)
+    if not path.exists():
+        print(f"Warning: ArcGIS inputs path does not exist: {path}", file=sys.stderr)
+    
+    return path
 
 
 def get_config_value(key: str, default: Any = None) -> Any:
@@ -106,7 +136,8 @@ if __name__ == "__main__":
         print("Current configuration:")
         print(json.dumps(config, indent=2))
         print()
-        print(f"Database path: {get_database_path()}")
-        print(f"Output path: {get_output_path()}")
+        print(f"Data path:          {get_data_path()}")
+        print(f"Database path:      {get_database_path()}")
+        print(f"ArcGIS inputs path: {get_arcgis_inputs_path()}")
     except SystemExit:
         pass

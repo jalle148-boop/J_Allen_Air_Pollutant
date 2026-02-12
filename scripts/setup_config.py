@@ -87,16 +87,35 @@ def setup_configuration() -> dict:
     
     config = {}
     
-    # Database path (required)
-    print("Step 1: Database Path")
+    # Data path (required) — raw .pkl / .zip files
+    print("Step 1: Data Path (raw pickle files)")
     print("-" * 60)
-    print("Select the folder containing your database files.")
+    print("Select the folder containing your raw .pkl / .zip data files.")
+    existing_data_path = existing_config.get("data_path", "")
+    initial_dir = existing_data_path if existing_data_path else None
+    
+    data_path = prompt_for_folder(
+        "Select Data Folder",
+        initial_dir=initial_dir
+    )
+    
+    if not data_path:
+        print("Error: Data path is required.", file=sys.stderr)
+        sys.exit(1)
+    
+    config["data_path"] = data_path
+    print(f"✓ Data path set to: {data_path}")
+    print()
+    
+    # Database path (required) — SQLite output
+    print("Step 2: Database Path (SQLite output)")
+    print("-" * 60)
+    print("Select the folder where the SQLite database will be stored.")
     existing_db_path = existing_config.get("database_path", "")
-    initial_dir = existing_db_path if existing_db_path else None
     
     db_path = prompt_for_folder(
         "Select Database Folder",
-        initial_dir=initial_dir
+        initial_dir=existing_db_path if existing_db_path else str(project_root)
     )
     
     if not db_path:
@@ -107,28 +126,28 @@ def setup_configuration() -> dict:
     print(f"✓ Database path set to: {db_path}")
     print()
     
-    # Optional: Output path
-    print("Step 2: Output Path (optional)")
+    # ArcGIS inputs path (optional)
+    print("Step 3: ArcGIS Inputs Path (optional)")
     print("-" * 60)
-    print("Select the folder for output files (leave empty to use project root).")
-    existing_output_path = existing_config.get("output_path", "")
+    print("Select the folder for CSV exports destined for ArcGIS Pro.")
+    existing_arc_path = existing_config.get("arcgis_inputs_path", "")
     
-    use_output = prompt_for_text("Configure output path? (y/n)", "n").lower()
-    if use_output in ("y", "yes"):
-        output_path = prompt_for_folder(
-            "Select Output Folder",
-            initial_dir=existing_output_path if existing_output_path else str(project_root)
+    use_arcgis = prompt_for_text("Configure ArcGIS inputs path? (y/n)", "n").lower()
+    if use_arcgis in ("y", "yes"):
+        arc_path = prompt_for_folder(
+            "Select ArcGIS Inputs Folder",
+            initial_dir=existing_arc_path if existing_arc_path else str(project_root)
         )
-        if output_path:
-            config["output_path"] = output_path
-            print(f"✓ Output path set to: {output_path}")
+        if arc_path:
+            config["arcgis_inputs_path"] = arc_path
+            print(f"✓ ArcGIS inputs path set to: {arc_path}")
     else:
-        config["output_path"] = str(project_root)
-        print(f"✓ Using default output path: {project_root}")
+        config["arcgis_inputs_path"] = str(project_root / "to_arcgis")
+        print(f"✓ Using default ArcGIS inputs path: {project_root / 'to_arcgis'}")
     print()
     
     # Optional: Additional settings
-    print("Step 3: Additional Settings (optional)")
+    print("Step 4: Additional Settings (optional)")
     print("-" * 60)
     
     # Max workers for parallel processing

@@ -1,6 +1,7 @@
 {
+  "data_path": "C:\\path\\to\\your\\raw\\data\\folder",
   "database_path": "C:\\path\\to\\your\\database\\folder",
-  "output_path": "C:\\path\\to\\your\\output\\folder",
+  "arcgis_inputs_path": "C:\\path\\to\\your\\arcgis\\export\\folder",
   "max_workers": 4,
   "verbose": false
 }

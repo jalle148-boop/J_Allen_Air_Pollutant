@@ -20,8 +20,9 @@ The configuration is stored as JSON in `.config` at the project root:
 
 ```json
 {
+  "data_path": "C:\\path\\to\\your\\raw\\data",
   "database_path": "C:\\path\\to\\your\\database",
-  "output_path": "C:\\path\\to\\output",
+  "arcgis_inputs_path": "C:\\path\\to\\your\\arcgis\\exports",
   "max_workers": 4,
   "verbose": false
 }
@@ -34,11 +35,12 @@ See [.config.example](.config.example) for a template.
 Import the config module to access settings:
 
 ```python
-from config import get_database_path, get_output_path, get_config_value
+from config import get_data_path, get_database_path, get_arcgis_inputs_path, get_config_value
 
 # Get paths
-db_path = get_database_path()      # Returns Path object
-output = get_output_path()         # Returns Path object
+data = get_data_path()             # Returns Path to raw .pkl / .zip files
+db   = get_database_path()         # Returns Path to SQLite database dir
+arcgis = get_arcgis_inputs_path()  # Returns Path to ArcGIS export dir
 
 # Get other values
 workers = get_config_value("max_workers", default=4)
