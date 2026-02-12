@@ -14,6 +14,8 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
+
 
 # ---------------------------------------------------------------------------
 # Discovery queries  –  what's available in the database?
@@ -152,6 +154,82 @@ def build_export_query(
     sql += "  ORDER BY s.year, si.state, si.county, s.start_date"
 
     return sql, params
+
+
+# ---------------------------------------------------------------------------
+# DataFrame helpers (used by Streamlit / notebooks)
+# ---------------------------------------------------------------------------
+
+_DF_COLUMNS = [
+    "ID", "DatasetKey", "ShapeletID", "SiteKey",
+    "State", "County", "SiteNum", "Latitude", "Longitude",
+    "ParameterCode", "Year", "StartDate", "EndDate",
+    "LengthDays", "PatternType", "DataType", "Quality",
+    "ShapeletValues", "SourceFile",
+]
+
+
+def query_to_dataframe(
+    conn: sqlite3.Connection,
+    sql: str,
+    params: list[Any],
+) -> pd.DataFrame:
+    """
+    Run the export query and return results as a pandas DataFrame.
+
+    This avoids writing to disk — useful for in-app previews.
+    """
+    df = pd.read_sql_query(sql, conn, params=params)
+    df.columns = _DF_COLUMNS
+    return df
+
+
+def site_summary_dataframe(
+    conn: sqlite3.Connection,
+    *,
+    years: list[int] | None = None,
+    pollutants: list[str] | None = None,
+) -> pd.DataFrame:
+    """Return the site-level summary as a DataFrame."""
+    sql = """
+        SELECT
+            si.site_key,
+            si.state,
+            si.county,
+            si.site_num,
+            si.latitude,
+            si.longitude,
+            COUNT(*)            AS shapelet_count,
+            AVG(s.quality)      AS avg_quality,
+            MIN(s.quality)      AS min_quality,
+            MAX(s.quality)      AS max_quality,
+            MIN(s.start_date)   AS earliest_date,
+            MAX(s.end_date)     AS latest_date,
+            GROUP_CONCAT(DISTINCT s.parameter_code) AS pollutants,
+            GROUP_CONCAT(DISTINCT s.year)            AS years
+        FROM shapelets s
+        LEFT JOIN sites si ON s.site_key = si.site_key
+        WHERE 1=1
+    """
+    params: list[Any] = []
+    if years:
+        placeholders = ",".join("?" for _ in years)
+        sql += f"  AND s.year IN ({placeholders})\n"
+        params.extend(years)
+    if pollutants:
+        placeholders = ",".join("?" for _ in pollutants)
+        sql += f"  AND s.parameter_code IN ({placeholders})\n"
+        params.extend(pollutants)
+    sql += "  GROUP BY si.site_key ORDER BY si.state, si.county"
+
+    df = pd.read_sql_query(sql, conn, params=params)
+    df.columns = [
+        "SiteKey", "State", "County", "SiteNum",
+        "Latitude", "Longitude",
+        "ShapeletCount", "AvgQuality", "MinQuality", "MaxQuality",
+        "EarliestDate", "LatestDate", "Pollutants", "Years",
+    ]
+    return df
 
 
 # ---------------------------------------------------------------------------
