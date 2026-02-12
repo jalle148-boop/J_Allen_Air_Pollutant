@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-Inspect a CSV file and generate a comprehensive structure report.
+Inspect a CSV or Excel (.xlsx) file and generate a comprehensive structure report.
 
 Designed to document the column layout, data types, value ranges, and
-overall shape of CSV files — particularly useful for identifying a
-template schema for writing data to CSVs that ArcGIS Pro 3.5 can import.
+overall shape of tabular files — particularly useful for identifying a
+template schema for writing data to CSVs / Excel that ArcGIS Pro 3.5
+can import.
 
 Usage:
     python scripts/inspect_csv_structure.py --input path\\to\\file.csv
+    python scripts/inspect_csv_structure.py --input path\\to\\file.xlsx
+    python scripts/inspect_csv_structure.py --input path\\to\\file.xlsx --sheet "Sheet2"
     python scripts/inspect_csv_structure.py --input path\\to\\file.csv --output report.txt
     python scripts/inspect_csv_structure.py --input path\\to\\file.csv --sample-rows 10
     python scripts/inspect_csv_structure.py   # Opens file dialog to select file interactively
@@ -31,15 +34,16 @@ import numpy as np
 # ---------------------------------------------------------------------------
 
 def prompt_for_file() -> str | None:
-    """Open a file dialog to select a .csv file."""
+    """Open a file dialog to select a .csv or .xlsx file."""
     root = Tk()
     root.withdraw()
     root.attributes("-topmost", True)
 
     file_path = filedialog.askopenfilename(
-        title="Select a CSV file",
+        title="Select a CSV or Excel file",
         filetypes=[
             ("CSV files", "*.csv"),
+            ("Excel files", "*.xlsx;*.xls"),
             ("Text files", "*.txt;*.tsv"),
             ("All files", "*.*"),
         ],
@@ -316,22 +320,100 @@ def _looks_like_date(series: pd.Series) -> bool:
 # Report builder
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Loaders
+# ---------------------------------------------------------------------------
+
+_EXCEL_EXTENSIONS = {".xlsx", ".xls"}
+
+
+def _load_dataframe(
+    path: Path,
+    *,
+    encoding: str,
+    separator: str,
+    sheet: str | int | None,
+) -> tuple[pd.DataFrame, str]:
+    """
+    Load a CSV or Excel file into a DataFrame.
+
+    Returns
+    -------
+    tuple[DataFrame, str]
+        (dataframe, format_label) where format_label is e.g.
+        "CSV" or "Excel (Sheet1)".
+    """
+    ext = path.suffix.lower()
+
+    if ext in _EXCEL_EXTENSIONS:
+        # Determine sheet target
+        target_sheet = sheet if sheet is not None else 0
+        df = pd.read_excel(path, sheet_name=target_sheet)
+
+        # Resolve the actual sheet name for the label
+        if isinstance(target_sheet, int):
+            xl = pd.ExcelFile(path)
+            sheet_label = xl.sheet_names[target_sheet]
+            xl.close()
+        else:
+            sheet_label = target_sheet
+
+        # Also gather sheet listing for the report
+        return df, f"Excel ({sheet_label})"
+    else:
+        df = pd.read_csv(path, encoding=encoding, sep=separator)
+        return df, "CSV"
+
+
+def _list_excel_sheets(path: Path) -> list[str] | None:
+    """Return sheet names for an Excel file, or None for non-Excel."""
+    if path.suffix.lower() not in _EXCEL_EXTENSIONS:
+        return None
+    xl = pd.ExcelFile(path)
+    names = xl.sheet_names
+    xl.close()
+    return names
+
+
+# ---------------------------------------------------------------------------
+# Report builder
+# ---------------------------------------------------------------------------
+
 def build_report(
     path: str,
     sample_rows: int,
     encoding: str,
     separator: str,
+    sheet: str | int | None = None,
 ) -> str:
-    """Load the CSV and assemble the full report string."""
-    csv_path = Path(path)
-    if not csv_path.exists():
-        raise FileNotFoundError(f"File not found: {csv_path}")
+    """Load a CSV or Excel file and assemble the full report string."""
+    file_path = Path(path)
+    if not file_path.exists():
+        raise FileNotFoundError(f"File not found: {file_path}")
 
-    df = pd.read_csv(csv_path, encoding=encoding, sep=separator)
+    df, format_label = _load_dataframe(
+        file_path, encoding=encoding, separator=separator, sheet=sheet,
+    )
+
+    # Title
+    title = f"Tabular Structure Report ({format_label})"
+
+    # Optional Excel sheet listing
+    sheet_info: list[str] = []
+    sheet_names = _list_excel_sheets(file_path)
+    if sheet_names is not None:
+        sheet_info.append("EXCEL SHEETS")
+        for idx, name in enumerate(sheet_names):
+            marker = "  ← inspected" if name in format_label else ""
+            sheet_info.append(f"  {idx}: {name}{marker}")
 
     sections: list[list[str]] = [
-        ["CSV Structure Report", "=" * 60],
-        _file_metadata(csv_path),
+        [title, "=" * 60],
+        _file_metadata(file_path),
+    ]
+    if sheet_info:
+        sections.append(sheet_info)
+    sections += [
         _shape_summary(df),
         _column_types(df),
         _missing_values(df),
@@ -353,15 +435,26 @@ def build_report(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Inspect a CSV file and generate a comprehensive structure report."
+        description="Inspect a CSV or Excel (.xlsx) file and generate a "
+                    "comprehensive structure report.",
     )
     parser.add_argument(
         "--input",
-        help="Path to a .csv file (will prompt if not provided)",
+        help="Path to a .csv or .xlsx file (will prompt if not provided)",
     )
     parser.add_argument(
         "--output",
-        help="Optional path to write the report (prints to stdout by default)",
+        help="Path to write the report. Defaults to reports/<input_stem>_report.md",
+    )
+    parser.add_argument(
+        "--no-save",
+        action="store_true",
+        help="Print to stdout only, do not save a file.",
+    )
+    parser.add_argument(
+        "--sheet",
+        default=None,
+        help="Sheet name or 0-based index for Excel files (default: first sheet)",
     )
     parser.add_argument(
         "--sample-rows",
@@ -377,7 +470,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--separator",
         default=",",
-        help="Column separator (default: comma)",
+        help="Column separator for CSV files (default: comma)",
     )
     return parser.parse_args()
 
@@ -394,19 +487,38 @@ def main() -> None:
             sys.exit(1)
         print(f"Selected: {input_path}\n")
 
+    # Resolve --sheet: try int conversion, otherwise keep as string
+    sheet = args.sheet
+    if sheet is not None:
+        try:
+            sheet = int(sheet)
+        except ValueError:
+            pass  # keep as string (sheet name)
+
     report = build_report(
         input_path,
         sample_rows=args.sample_rows,
         encoding=args.encoding,
         separator=args.separator,
+        sheet=sheet,
     )
 
-    if args.output:
-        out = Path(args.output)
-        out.write_text(report, encoding="utf-8")
-        print(f"Report written to {out}")
-    else:
+    # Determine output path
+    if args.no_save:
         print(report)
+    else:
+        if args.output:
+            out = Path(args.output)
+        else:
+            reports_dir = Path(__file__).resolve().parent.parent / "reports"
+            reports_dir.mkdir(exist_ok=True)
+            stem = Path(input_path).stem
+            out = reports_dir / f"{stem}_report.md"
+
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(report, encoding="utf-8")
+        print(report)
+        print(f"Report saved to {out}")
 
 
 if __name__ == "__main__":
